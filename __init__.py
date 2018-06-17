@@ -65,7 +65,7 @@ def search_ordering_card(browser):
 
         # whatever card is selected
         for search_param in queries:
-            query = "deck:'The Deck::Core 2k/6k Optimized Japanese Vocabulary' Vocabulary-Kanji:{}".format(search_param)
+            query = "deck:'{}' Vocabulary-Kanji:{}".format(SRC_DECK, search_param)
             other_notes = mw.col.findNotes(query)
             if len(other_notes) == 0:
                 # showInfo("No cards for query {}".format(query))
