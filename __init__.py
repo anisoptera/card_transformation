@@ -6,7 +6,7 @@ from aqt import mw
 from aqt.utils import showInfo, askUser
 # import all of the Qt GUI library
 from aqt.qt import *
-from anki.hooks import addHook
+from anki.hooks import addHook, remHook
 from anki.utils import intTime
 import sys
 import re
@@ -18,9 +18,12 @@ def eprint(*args, **kwargs):
 
 ORDERING_DECK = 'The Deck::KLC Important Vocab'
 SRC_DECK = 'The Deck::Core 2k/6k Optimized Japanese Vocabulary'
+# Enable reloading menu option and hotkey for development
+RELOAD_BUTTON_ENABLED = True
 
 # this is either a really cool hack or a nightmare. you decide!
-last_ordering_card = None
+try: last_ordering_card = last_ordering_card or None
+except NameError: last_ordering_card = None
 
 
 def replace_note(ordering_note, replacing_note):
@@ -47,7 +50,8 @@ def search_ordering_card(browser):
         global last_ordering_card
         last_ordering_card = note
 
-        front = last_ordering_card['Front']
+        try: front = last_ordering_card['Front']
+        except: continue # Don't throw an error when a non-KLC card type is encountered
         queries = [front]
 
         # Remove する
@@ -101,15 +105,46 @@ def confirm_matching_card(browser):
     browser.search()
 
 
+def reload_extension(browser):
+    from importlib import reload
+    addonFolder = mw.pm.addonFolder()
+    if addonFolder not in sys.path:
+        sys.path.insert(0, addonFolder)
+    import card_transformation
+    reload(card_transformation)
+    browser.model.reset()
+    mw.reset()
+    # Explicitly reinitialize the menu, so the user doesn't need to reopen the browser
+    setup_menus(browser)
+
+# clear previously bound actions if they remain, and initialize the cleanup list
+try:
+    for (item, action) in prev_actions:
+        try: item.removeAction(action)
+        except: pass
+    prev_actions = []
+except NameError: prev_actions = []
 def setup_menus(obj):
     print(obj)
     item = obj.form.menu_Cards
-    o_card = item.addAction("Use as ordering card")
+    def register_action(*actArgs, trigger):
+        "Automatically handles cleanup registration for reloading"
+        action = item.addAction(*actArgs)
+        prev_actions.append((item, action))
+        action.triggered.connect(lambda _: trigger(obj))
+        return action
+
+    o_card = register_action("Use as ordering card", trigger=search_ordering_card)
     o_card.setShortcut(QKeySequence("Ctrl+Shift+O"))
-    o_card.triggered.connect(lambda x: search_ordering_card(obj))
 
-    c_card = item.addAction("Confirm matching card")
-    c_card.triggered.connect(lambda x: confirm_matching_card(obj))
+    c_card = register_action("Confirm matching card", trigger=confirm_matching_card)
 
+    if RELOAD_BUTTON_ENABLED:
+        rl_card = register_action("Reload Card_Transformer Extension", trigger=reload_extension)
+        rl_card.setShortcut(QKeySequence("Ctrl+Shift+E"))
 
+# clear previous menu hook to prevent duplicate menu items being added across browser sessions
+try: remHook("browser.setupMenus", prev_menu_hook)
+except NameError: prev_menu_hook = None
 addHook("browser.setupMenus", setup_menus)
+prev_menu_hook = setup_menus
