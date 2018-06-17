@@ -105,6 +105,7 @@ def setup_menus(obj):
     print(obj)
     item = obj.form.menu_Cards
     o_card = item.addAction("Use as ordering card")
+    o_card.setShortcut(QKeySequence("Ctrl+Shift+O"))
     o_card.triggered.connect(lambda x: search_ordering_card(obj))
 
     c_card = item.addAction("Confirm matching card")
