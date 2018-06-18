@@ -15,11 +15,25 @@ import re
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
+#======================================================================#
+#= Configuration handling                                             =#
+#======================================================================#
 
-ORDERING_DECK = 'The Deck::KLC Important Vocab'
-SRC_DECK = 'The Deck::Core 2k/6k Optimized Japanese Vocabulary'
+_config = None
+def get_opt(option_name):
+    global _config
+    if _config is None:
+        _config = mw.addonManager.getConfig(__name__)
+    return _config[option_name]
+
+# Deck which will have cards replaced from source deck preserving order
+def get_ordering_deck(): return get_opt("OrderingDeck")
+# Deck which will have cards pulled out of it
+def get_source_deck(): return get_opt("SourceDeck")
 # Enable reloading menu option and hotkey for development
-RELOAD_BUTTON_ENABLED = True
+def get_reload_enabled(): return get_opt("ReloadButtonEnabled")
+
+#======================================================================#
 
 # this is either a really cool hack or a nightmare. you decide!
 try: last_ordering_card = last_ordering_card or None
@@ -27,7 +41,7 @@ except NameError: last_ordering_card = None
 
 
 def replace_note(ordering_note, replacing_note):
-    target_deck = mw.col.decks.id(ORDERING_DECK)
+    target_deck = mw.col.decks.id(get_ordering_deck())
     ordering = ordering_note['Entry Number']
 
     replacing_note['Optimized-Voc-Index'] = ordering
@@ -69,7 +83,7 @@ def search_ordering_card(browser):
 
         # whatever card is selected
         for search_param in queries:
-            query = "deck:'{}' Vocabulary-Kanji:{}".format(SRC_DECK, search_param)
+            query = "deck:'{}' Vocabulary-Kanji:{}".format(get_source_deck(), search_param)
             other_notes = mw.col.findNotes(query)
             if len(other_notes) == 0:
                 # showInfo("No cards for query {}".format(query))
@@ -104,8 +118,9 @@ def confirm_matching_card(browser):
     browser._lastSearchTxt = "deck:current is:new"
     browser.search()
 
-
 def reload_extension(browser):
+    global _config
+    _config = None
     from importlib import reload
     addonFolder = mw.pm.addonFolder()
     if addonFolder not in sys.path:
@@ -139,7 +154,7 @@ def setup_menus(obj):
 
     c_card = register_action("Confirm matching card", trigger=confirm_matching_card)
 
-    if RELOAD_BUTTON_ENABLED:
+    if get_reload_enabled():
         rl_card = register_action("Reload Card_Transformer Extension", trigger=reload_extension)
         rl_card.setShortcut(QKeySequence("Ctrl+Shift+E"))
 
