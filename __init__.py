@@ -30,6 +30,8 @@ def get_opt(option_name):
 def get_ordering_deck(): return get_opt("OrderingDeck")
 # Deck which will have cards pulled out of it
 def get_source_deck(): return get_opt("SourceDeck")
+# Enable automatic flagging (coloration) of cards as they are processed.
+def get_flagging_enabled(): return get_opt("Flagging")
 # Enable reloading menu option and hotkey for development
 def get_reload_enabled(): return get_opt("ReloadButtonEnabled")
 
@@ -56,6 +58,16 @@ update cards set usn=?, mod=?, did=? where id = ?""",
     mw.col.remNotes([ordering_note.id])
     mw.progress.finish()
     mw.reset()
+
+def set_flag_for_cards_in_note(note, flag, only_unflagged=False):
+    "Changes the flag on all cards for a note, or only for those which are not already flagged"
+    card_ids_to_flag = []
+    for c in note.cards():
+        if (not only_unflagged) or c.userFlag() == 0:
+            card_ids_to_flag.append(c.id)
+    if card_ids_to_flag:
+        mw.col.setUserFlag(flag, card_ids_to_flag)
+    # browser.model.reset() seems needed for flagging to take effect; call it after batches of this
 
 
 def search_ordering_card(browser):
@@ -87,21 +99,26 @@ def search_ordering_card(browser):
             other_notes = mw.col.findNotes(query)
             if len(other_notes) == 0:
                 # showInfo("No cards for query {}".format(query))
+                if get_flagging_enabled(): set_flag_for_cards_in_note(note, 3)
                 continue
             if len(other_notes) == 1:
                 other = mw.col.getNote(other_notes[0])
                 response = askUser("Single match detected: {} = {}, \n{} =? {}\nReplace?".format(
                     last_ordering_card['Front'], other['Vocabulary-Kanji'], last_ordering_card['Meaning'], other['Vocabulary-English']))
                 if response:
+                    if get_flagging_enabled(): set_flag_for_cards_in_note(other, 4)
                     replace_note(last_ordering_card, other)
                     break
                 else:
                     continue
 
+            if get_flagging_enabled(): set_flag_for_cards_in_note(last_ordering_card, 2)
+
             browser._lastSearchTxt = query
             browser.search()
             showInfo("Find match for {},\n{}".format(last_ordering_card['Front'], last_ordering_card['Meaning']))
             return
+    if get_flagging_enabled(): browser.model.reset()
 
     # search for it in hardcoded db
     # possibly automate transforms
@@ -113,6 +130,7 @@ def confirm_matching_card(browser):
     assert(last_ordering_card is not None)
 
     selected_note = browser.card.note()
+    if get_flagging_enabled(): set_flag_for_cards_in_note(selected_note, 4)
     replace_note(last_ordering_card, selected_note)
     last_ordering_card = None
     browser._lastSearchTxt = "deck:current is:new"
